@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Trash2, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
 import { FaPlusCircle } from "react-icons/fa";
+import api from "./services/api"
 
 type Task = {
   id: number;
@@ -21,20 +22,67 @@ export default function TodoList() {
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
-  const toggleTask = (id: number) => {
-    setTasks(tasks.map((t) =>
-      t.id === id ? { ...t, done: !t.done } : t
-    ));
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const res = await api.get("/task");
+      setTasks(res.data);
+    } catch (error) {
+      console.error("Erro ao buscar tarefas", error);
+    }
   };
 
-  const deleteTask = (id: number) => {
-    setTasks(tasks.filter((t) => t.id !== id));
+  const createTask = async () => {
+      try {
+        const res = await api.post("/task", {
+          title: newTitle,
+          description: newDescription,
+          done: false,
+        });
+      setTasks([...tasks, res.data]);
+    } catch (error) {
+      console.error("Erro ao criar tarefa", error);
+    }
   };
 
-  const toggleExpand = (id: number) => {
-    setTasks(tasks.map((t) =>
-      t.id === id ? { ...t, expanded: !t.expanded } : t
-    ));
+  const updateTask = async (id: number) => {
+    try {
+      const res = await api.put(`/task/${id}`, {
+        title: newTitle,
+        description: newDescription,
+        done: false,
+      });
+      setTasks(tasks.map((t) => (t.id === id ? res.data : t)));
+    } catch (error) {
+      console.error("Erro ao atualizar tarefa", error);
+    }
+  };
+
+  const deleteTask = async (id: number) => {
+    try {
+      await api.delete(`/task/${id}`);
+      setTasks(tasks.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error("Erro ao deletar tarefa", error);
+    }
+  };
+
+  const toggleTask = async (id: number) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    try {
+      const res = await api.put(`/task/${id}`, {
+        ...task,
+        done: !task.done,
+      });
+      setTasks(tasks.map((t) => (t.id === id ? res.data : t)));
+    } catch (error) {
+      console.error("Erro ao marcar tarefa como concluída", error);
+    }
   };
 
   const openAddModal = () => {
@@ -51,42 +99,21 @@ export default function TodoList() {
     setIsModalOpen(true);
   };
 
-  const saveTask = () => {
+  const saveTask = async () => {
     if (!newTitle.trim()) return;
-
-    const currentTime = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    if (editingTaskId !== null) {
-      // Editar tarefa existente e atualizar horário
-      setTasks(tasks.map((t) =>
-        t.id === editingTaskId
-          ? {
-              ...t,
-              title: newTitle,
-              description: newDescription,
-              updatedAt: currentTime,
-            }
-          : t
-      ));
+    if (editingTaskId) {
+      await updateTask(editingTaskId);
     } else {
-      // Criar nova tarefa
-      const newTask: Task = {
-        id: tasks.length > 0 ? tasks[tasks.length - 1].id + 1 : 1,
-        title: newTitle,
-        description: newDescription,
-        done: false,
-        createdAt: currentTime,
-      };
-      setTasks([...tasks, newTask]);
+      await createTask();
     }
-
     setIsModalOpen(false);
     setNewTitle("");
     setNewDescription("");
     setEditingTaskId(null);
+  };
+
+  const toggleExpand = (id: number) => {
+    setTasks(tasks.map((t) => (t.id === id ? {...t, expanded: !t.expanded} : t)));
   };
 
   return (
@@ -177,7 +204,6 @@ export default function TodoList() {
           Adicionar Tarefa
         </button>
 
-        {/* Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 relative text-gray-800">
